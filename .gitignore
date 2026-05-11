@@ -24,3 +24,5 @@ _codolio_sheet.json
 Thumbs.db
 .idea/
 .vscode/
+
+.vercel
