@@ -1,0 +1,26 @@
+# Python virtualenv
+.venv/
+__pycache__/
+*.pyc
+
+# Generated C++ workspace (your in-progress work stays local)
+solutions/
+
+# Personal progress tracker
+progress.json
+
+# Cached external catalogues (regenerated on demand)
+_leetcode_cache.json
+_codolio_sheet.json
+
+# Vercel local config
+.vercel/
+
+# Claude Code per-project state
+.claude/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

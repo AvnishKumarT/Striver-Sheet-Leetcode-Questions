@@ -1,0 +1,26 @@
+# Local-only; never publish these
+.venv/
+.git/
+__pycache__/
+*.pyc
+
+# Python toolkit — only the static HTML viewer is deployed
+*.py
+requirements.txt
+
+# Local data files that aren't part of the deployed page
+problems.json
+progress.json
+_leetcode_cache.json
+_codolio_sheet.json
+solutions/
+
+# Internal docs (the deployed site doesn't need them)
+PROJECT_CONTEXT.md
+README.md
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
