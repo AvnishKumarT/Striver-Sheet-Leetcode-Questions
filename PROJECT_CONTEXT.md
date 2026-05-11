@@ -27,6 +27,12 @@ striver-a2z-sheet-questions/
 ├── scrape_takeuforward.py       Playwright scraper → problems.json
 ├── enrich_practice_urls.py      Pass 1: fill missing practice_url via LeetCode fuzzy match
 ├── enrich_from_codolio.py       Pass 2: fill remaining via Codolio community mapping
+├── enrich_practice_urls_semantic.py  Pass 4 (LLM judge, see §3): semantic problem-statement matching
+├── _striver_descriptions/       Cached article texts (gitignored)
+├── _lc_descriptions/            Cached LC problem statements (gitignored)
+├── _llm_verdicts.json           Cached LLM judgements per (problem_id, candidate_set, model)
+├── .env                         GROQ_API_KEY / GEMINI_API_KEY (gitignored)
+├── .env.example                 Template for the above
 ├── generate_skeleton.py         problems.json → solutions/ tree (C++ stubs)
 ├── generate_html.py             problems.json → problems.html (browseable list)
 ├── progress.py                  CLI: mark / show / list / stats — writes progress.json
@@ -147,6 +153,56 @@ SPOJ 1. The 185 still-unlinked problems are mostly: 24 theory rows, 22
 Step-1 "Pattern N" prints, and ~140 concept/intro problems that only exist
 on GFG. GFG has no usable public API and no Codolio-mapped URL — see §6 N7.
 
+### `enrich_practice_urls_semantic.py`  (Stage 4 — LLM judge)
+
+For each problem still without `practice_url`, this script does:
+
+1. Fetches the Striver article body via Playwright (cached to disk).
+2. Picks the **top-5 LC candidates** by title fuzzy similarity.
+3. Fetches each candidate's LC problem statement via GraphQL (cached).
+4. Sends **one batched LLM call**: "given this Striver problem and these 5 LC
+   candidates, pick the one that asks the SAME question (same input, same
+   output, same algorithmic logic) or say none — return JSON
+   `{slug, confidence, reason}`."
+5. If `confidence ≥ threshold` AND the slug is in the candidate set AND the
+   LC difficulty is within one level of the Striver difficulty, writes
+   `practice_url`, `practice_url_source = "leetcode-semantic"`,
+   `practice_url_confidence`, `practice_url_reason`.
+
+**Calibration first** (`--calibrate`): 30 known-correct + 30 random-mismatch
+pairs measure the model's confidence distribution. The script auto-picks the
+threshold as `max(min_threshold=0.97, max_negative_leak + 0.001)` — i.e.
+zero known-bad-leakage by construction.
+
+**LLM provider auto-detection**: routes to Groq (OpenAI-compatible) if model
+name starts with `llama-` etc., or Gemini (generateContent) if it starts
+with `gemini-`. Default is whichever key is set in the env (`.env`):
+prefers Gemini when both are present.
+
+**Quality observed across 3 models in calibration:**
+
+| Model | Verdict |
+|---|---|
+| `llama-3.3-70b-versatile` (Groq) | Excellent. 26/30 positives matched at 1.0; 0/30 negative leaks. **Strict and accurate.** |
+| `llama-3.1-8b-instant` (Groq) | **DO NOT USE.** Rubber-stamped every LC candidate at conf=1.0 in a 143-problem run; 103/143 were hallucinated false matches. The script's idempotent rollback was used to clean them up. |
+| `gemini-2.5-flash-lite` (Gemini) | Good. 14/20 positives at conf 1.0 (~70% recall); 0 hallucinations observed. Similar profile to 70B. |
+
+**Free-tier quota reality (as of May 2026):**
+
+| Provider | Daily cap | Throughput | Notes |
+|---|---|---|---|
+| Groq `llama-3.3-70b-versatile` | 100 K tokens / day | 30 RPM | ~30 problems/day in our payload |
+| Groq `llama-3.1-8b-instant` | 500 K tokens / day | 30 RPM | Capacity is high BUT model hallucinates — unusable |
+| Gemini `gemini-2.5-flash-lite` | 20 requests / day | 15 RPM | Project-level free cap, shared across Gemini models |
+
+To finish the remaining ~143 unmatched problems on these free tiers:
+~3 days at 50 problems/day. The script's verdict cache + atomic
+`_save_partial()` (every 10 problems) makes resuming clean: re-running
+picks up where the last run was capped, never re-pays for prior verdicts.
+
+CLI flags: `--calibrate`, `--threshold N`, `--min-threshold N`, `--top-k N`,
+`--model NAME`, `--limit N`, `--dry-run`, `--headed`.
+
 ### `generate_html.py`
 
 Renders `problems.json` to a self-contained `problems.html`. **Each title
@@ -260,11 +316,13 @@ so re-scraping never clobbers it.
 python -m playwright install chromium
 
 # --- The full pipeline (run in order after the first scrape) ---
-python scrape_takeuforward.py        # 1. scrape   → problems.json
-python enrich_practice_urls.py       # 2. LC fuzzy match for missing URLs
-python enrich_from_codolio.py        # 3. Codolio community mapping fallback
-python generate_html.py              # 4. → problems.html (open in any browser)
-python generate_skeleton.py          # 5. → solutions/ folder tree (C++ stubs)
+python scrape_takeuforward.py             # 1. scrape    → problems.json
+python enrich_practice_urls.py            # 2. LC fuzzy match  (free, fast, deterministic)
+python enrich_from_codolio.py             # 3. Codolio community map  (free, fast, deterministic)
+python enrich_practice_urls_semantic.py --calibrate            # 4a. LLM calibration  (uses API quota)
+python enrich_practice_urls_semantic.py --threshold 0.97       # 4b. LLM semantic match  (uses API quota)
+python generate_html.py                   # 5. → problems.html
+python generate_skeleton.py               # 6. → solutions/ folder tree (C++ stubs)
 
 # Track progress
 python progress.py stats

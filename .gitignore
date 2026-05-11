@@ -13,11 +13,22 @@ progress.json
 _leetcode_cache.json
 _codolio_sheet.json
 
+# Semantic-enricher caches (regenerated on demand)
+_striver_descriptions/
+_lc_descriptions/
+_llm_verdicts.json
+*.json.tmp
+
 # Vercel local config
 .vercel/
 
 # Claude Code per-project state
 .claude/
+
+# Local secrets — never commit
+.env
+.env.local
+*.local.env
 
 # OS / editor
 .DS_Store

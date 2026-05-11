@@ -4,6 +4,11 @@
 __pycache__/
 *.pyc
 
+# Secrets
+.env
+.env.local
+*.local.env
+
 # Python toolkit — only the static HTML viewer is deployed
 *.py
 requirements.txt
@@ -13,6 +18,9 @@ problems.json
 progress.json
 _leetcode_cache.json
 _codolio_sheet.json
+_striver_descriptions/
+_lc_descriptions/
+_llm_verdicts.json
 solutions/
 
 # Internal docs (the deployed site doesn't need them)

@@ -20,6 +20,13 @@ in C++.
 - `enrich_from_codolio.py` — pass 2: cross-reference the Codolio community
   Striver A2Z mapping to fill more URLs (LeetCode / HackerRank /
   InterviewBit / SPOJ). Skips takeuforward URLs — those aren't practice links.
+- `enrich_practice_urls_semantic.py` — pass 3: LLM judge compares actual
+  problem statements. For each still-unmatched problem, fetches the Striver
+  article + top-5 LC candidate descriptions, then asks an LLM (Groq Llama
+  3.3 70B or Gemini 2.5 Flash Lite) "is any of these the same problem with
+  the same input/output/logic?". Accepts a match only at confidence ≥ 0.97
+  with difficulty within one level. Uses 1 API call per problem; caches
+  verdicts. Needs a free API key — see `.env.example`.
 - `generate_skeleton.py` — turns `problems.json` into a folder tree under
   `solutions/` with a `solution.cpp` stub and a `README.md` per problem.
 - `generate_html.py` — renders `problems.json` to a self-contained
@@ -85,6 +92,29 @@ python enrich_from_codolio.py     # fills more via Codolio's community-maintaine
 Both are safe to re-run; both write back to `problems.json` in place.
 `takeuforward.org` URLs are never used as practice links — that was an
 explicit user requirement.
+
+### 1c. (Optional) Semantic LLM matching for the last gap
+
+```powershell
+# One-time: copy .env.example to .env and add an API key (free)
+copy .env.example .env
+# Edit .env to set GROQ_API_KEY (https://console.groq.com/keys) or
+# GEMINI_API_KEY (https://aistudio.google.com/apikey)
+
+# Calibrate once (60 LLM calls; auto-picks safe threshold)
+python enrich_practice_urls_semantic.py --calibrate
+
+# Production: process all unmatched problems
+python enrich_practice_urls_semantic.py --threshold 0.97
+```
+
+Free-tier daily caps mean a full run may need 2–3 days to finish — the script
+caches LLM verdicts to `_llm_verdicts.json` and saves progress every 10
+problems, so re-running picks up cleanly where the previous run was capped.
+
+**Important**: do NOT use `llama-3.1-8b-instant` — it hallucinates badly
+(rubber-stamps wrong matches at confidence 1.0). Use either
+`llama-3.3-70b-versatile` (default) or `gemini-2.5-flash-lite`.
 
 ### 2. Generate the C++ folder skeleton
 
