@@ -88,14 +88,33 @@ GEMINI_URL_TEMPLATE = (
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite"
 GEMINI_RATE_LIMIT_SLEEP = 4.1  # free tier 15 RPM for 2.5-flash-lite
 
+NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+DEFAULT_NVIDIA_MODEL = "meta/llama-3.3-70b-instruct"
+NVIDIA_RATE_LIMIT_SLEEP = 5.0  # free tier appears to burst-limit ~12 RPM
+
 
 def _provider_for_model(model: str) -> str:
-    """Return 'groq' or 'gemini' for the given model name."""
-    return "gemini" if model.lower().startswith("gemini") else "groq"
+    """Return 'groq', 'gemini', or 'nvidia' for the given model name.
+
+    Heuristic: a slash in the name (e.g. 'meta/llama-3.3-70b-instruct') is
+    NVIDIA's catalogue convention. A 'gemini-' prefix is Google. Everything
+    else (the plain Llama / Mixtral names) is Groq.
+    """
+    m = model.lower()
+    if "/" in m:
+        return "nvidia"
+    if m.startswith("gemini"):
+        return "gemini"
+    return "groq"
 
 
 def _rate_limit_sleep_for(model: str) -> float:
-    return GEMINI_RATE_LIMIT_SLEEP if _provider_for_model(model) == "gemini" else GROQ_RATE_LIMIT_SLEEP
+    prov = _provider_for_model(model)
+    if prov == "gemini":
+        return GEMINI_RATE_LIMIT_SLEEP
+    if prov == "nvidia":
+        return NVIDIA_RATE_LIMIT_SLEEP
+    return GROQ_RATE_LIMIT_SLEEP
 
 LC_GRAPHQL_URL = "https://leetcode.com/graphql/"
 LC_RATE_LIMIT_SLEEP = 0.25  # gentle on LC
@@ -573,6 +592,69 @@ def _gemini_call(
     return text or ""
 
 
+def _nvidia_call(
+    messages: list[dict[str, str]],
+    *,
+    model: str = DEFAULT_NVIDIA_MODEL,
+    timeout: float = 60.0,
+) -> dict[str, Any]:
+    """Call NVIDIA NIM (OpenAI-compatible). Returns the parsed JSON body."""
+    key = os.environ.get("NVIDIA_API_KEY")
+    if not key:
+        raise SystemExit("! NVIDIA_API_KEY not set (in .env or environment)")
+    payload = json.dumps({
+        "model": model,
+        "messages": messages,
+        "temperature": 0,
+        # NVIDIA NIM accepts response_format on most chat models that support
+        # JSON mode; falls back gracefully if the model ignores it.
+        "response_format": {"type": "json_object"},
+        "max_tokens": 400,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        NVIDIA_URL,
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": USER_AGENT,
+        },
+        method="POST",
+    )
+    delay = 2.0
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            err_body = ""
+            try:
+                err_body = e.read().decode("utf-8", errors="replace")[:400]
+            except Exception:
+                pass
+            if e.code == 429 and attempt < 4:
+                # NVIDIA's free tier rate-limit is per-minute. A short backoff
+                # isn't enough — wait at least 60s for the window to slide.
+                retry_after = e.headers.get("Retry-After") if hasattr(e, "headers") else None
+                wait = max(60, int(retry_after) if retry_after and retry_after.isdigit() else 60)
+                print(f"  ! NVIDIA 429 (rate limit); sleeping {wait}s before retry", flush=True)
+                time.sleep(wait)
+                continue
+            if e.code in (500, 502, 503, 504) and attempt < 4:
+                time.sleep(delay)
+                delay *= 2
+                continue
+            raise SystemExit(f"! NVIDIA HTTP {e.code}: {err_body}")
+        except Exception as e:
+            if attempt < 4:
+                time.sleep(delay)
+                delay *= 2
+                continue
+            raise SystemExit(f"! NVIDIA call failed: {e}")
+    raise SystemExit("! NVIDIA retries exhausted")
+
+
 def _groq_call(
     messages: list[dict[str, str]],
     *,
@@ -644,10 +726,26 @@ def _load_verdict_cache() -> dict[str, Any]:
     return {}
 
 
+def _atomic_replace(src: Path, dst: Path, *, retries: int = 8) -> None:
+    """`os.replace` with retry for transient Windows / OneDrive file locks.
+    OneDrive frequently grabs a brief shared lock on a file it's syncing,
+    causing PermissionError [WinError 5] / [WinError 32]. Backoff and retry."""
+    delay = 0.3
+    for attempt in range(retries):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay)
+            delay = min(delay * 1.7, 4.0)
+
+
 def _save_verdict_cache(cache: dict[str, Any]) -> None:
     tmp = LLM_VERDICT_CACHE.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
-    os.replace(tmp, LLM_VERDICT_CACHE)
+    _atomic_replace(tmp, LLM_VERDICT_CACHE)
 
 
 def _verdict_cache_key(
@@ -696,22 +794,20 @@ def _judge_pair_set(
         candidates_block=candidates_block,
         max_index=len(candidates) - 1,
     )
-    if _provider_for_model(model) == "gemini":
-        content = _gemini_call(
-            [
-                {"role": "system", "content": _JUDGE_SYSTEM},
-                {"role": "user", "content": user_msg},
-            ],
-            model=model,
-        ) or "{}"
-    else:
-        body = _groq_call(
-            [
-                {"role": "system", "content": _JUDGE_SYSTEM},
-                {"role": "user", "content": user_msg},
-            ],
-            model=model,
+    provider = _provider_for_model(model)
+    msgs = [
+        {"role": "system", "content": _JUDGE_SYSTEM},
+        {"role": "user", "content": user_msg},
+    ]
+    if provider == "gemini":
+        content = _gemini_call(msgs, model=model) or "{}"
+    elif provider == "nvidia":
+        body = _nvidia_call(msgs, model=model)
+        content = (
+            (body.get("choices") or [{}])[0].get("message", {}).get("content") or "{}"
         )
+    else:
+        body = _groq_call(msgs, model=model)
         content = (
             (body.get("choices") or [{}])[0].get("message", {}).get("content") or "{}"
         )
@@ -933,6 +1029,119 @@ def _difficulty_compatible(striver: str | None, lc_level: int | None) -> bool:
     return abs(order[striver] - order[lc_str]) <= 1
 
 
+def _process_one_problem(
+    *,
+    p: dict[str, Any],
+    title: str,
+    fetcher_factory,
+    catalogue: list[LCCandidate],
+    top_k: int,
+    model: str,
+    threshold: float,
+    verdict_cache: dict[str, Any],
+    stats: dict[str, int],
+    samples: list[str],
+) -> None:
+    """Pull a Striver desc + top-K LC descs + ask the judge. Records the
+    outcome in `stats`, prints a one-line summary, may mutate `p` to add the
+    new `practice_url` fields when a match is accepted.
+
+    Network sleeps run inside this function so that the caller's `finally`
+    block always runs the same way after each problem."""
+    sleep_sec = _rate_limit_sleep_for(model)
+
+    sf = fetcher_factory()
+    striver_desc = fetch_striver_desc(
+        sf,
+        problem_id=p.get("id"),
+        url=p.get("article_url") or p.get("plus_problem_url"),
+    )
+    if not striver_desc or len(striver_desc) < 200:
+        stats["rejected_no_desc"] += 1
+        print("  no usable striver description")
+        return
+
+    cands = top_k_candidates(title, catalogue, top_k)
+    descs: list[str] = []
+    kept: list[LCCandidate] = []
+    for c in cands:
+        d = fetch_leetcode_desc(c.slug)
+        if d:
+            kept.append(c)
+            descs.append(d)
+    if not kept:
+        stats["rejected_no_desc"] += 1
+        print("  no LC candidate descriptions")
+        return
+
+    cache_key = _verdict_cache_key(p.get("id"), kept, model)
+    from_cache = cache_key in verdict_cache
+    verdict = _judge_pair_set(
+        striver_title=title,
+        striver_diff=p.get("difficulty"),
+        striver_desc=striver_desc,
+        candidates=kept,
+        candidate_descs=descs,
+        model=model,
+        verdict_cache=verdict_cache,
+        problem_id=p.get("id"),
+    )
+    if from_cache:
+        stats["verdict_cache_hits"] += 1
+    if not verdict:
+        stats["errors"] += 1
+        print("  judge call failed")
+        if not from_cache:
+            time.sleep(sleep_sec)
+        return
+
+    picked_slug = verdict.get("slug")
+    conf = float(verdict.get("confidence") or 0.0)
+    picked_obj = next((c for c in kept if c.slug == picked_slug), None)
+
+    if not picked_slug or picked_slug == "null":
+        stats["rejected_below_threshold"] += 1
+        print(f"  no match (judge said none)")
+        if not from_cache:
+            time.sleep(sleep_sec)
+        return
+
+    if picked_obj is None:
+        stats["rejected_bad_slug"] += 1
+        print(f"  bad slug {picked_slug!r} (not in candidates)")
+        if not from_cache:
+            time.sleep(sleep_sec)
+        return
+
+    if conf < threshold:
+        stats["rejected_below_threshold"] += 1
+        print(f"  conf {conf:.3f} < {threshold:.3f}")
+        if not from_cache:
+            time.sleep(sleep_sec)
+        return
+
+    if not _difficulty_compatible(p.get("difficulty"), picked_obj.difficulty_level):
+        stats["rejected_difficulty"] += 1
+        print(
+            f"  difficulty mismatch (striver={p.get('difficulty')} "
+            f"lc={picked_obj.difficulty_level})"
+        )
+        if not from_cache:
+            time.sleep(sleep_sec)
+        return
+
+    p["practice_url"] = f"https://leetcode.com/problems/{picked_slug}/"
+    p["practice_url_source"] = "leetcode-semantic"
+    p["practice_url_confidence"] = round(conf, 3)
+    p["practice_url_reason"] = (verdict.get("reason") or "")[:160]
+    stats["matched"] += 1
+    print(f"  matched LC {picked_obj.title!r} conf={conf:.3f}")
+    if len(samples) < 12:
+        samples.append(f"[{conf:.3f}] {title!r} -> {picked_obj.title!r}")
+    if not from_cache:
+        time.sleep(sleep_sec)
+
+
 def run_production(
     *,
     threshold: float,
@@ -986,110 +1195,59 @@ def run_production(
             return
         tmp = PROBLEMS_FILE.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
-        os.replace(tmp, PROBLEMS_FILE)
+        _atomic_replace(tmp, PROBLEMS_FILE)
         _save_verdict_cache(verdict_cache)
 
-    with _StriverFetcher(headless=headless) as sf:
+    sf_holder: list[_StriverFetcher] = []
+
+    def _ensure_fetcher() -> _StriverFetcher:
+        """Lazily (re-)create the Playwright browser. Used after a crash."""
+        if not sf_holder:
+            sf = _StriverFetcher(headless=headless)
+            sf.__enter__()
+            sf_holder.append(sf)
+        return sf_holder[0]
+
+    def _drop_fetcher() -> None:
+        """Force-close the browser; next _ensure_fetcher() builds a fresh one."""
+        if sf_holder:
+            try:
+                sf_holder[0].__exit__(None, None, None)
+            except Exception:
+                pass
+            sf_holder.clear()
+
+    try:
         for i, p in enumerate(candidates_to_process, 1):
-            title = p["title"]
+            title = p.get("title") or ""
             print(f"  [{i:>3}/{stats['considered']}] {title[:55]:<55}", end="", flush=True)
-
-            striver_desc = fetch_striver_desc(
-                sf,
-                problem_id=p.get("id"),
-                url=p.get("article_url") or p.get("plus_problem_url"),
-            )
-            if not striver_desc or len(striver_desc) < 200:
-                stats["rejected_no_desc"] += 1
-                print("  no usable striver description")
-                continue
-
-            cands = top_k_candidates(title, catalogue, top_k)
-            descs: list[str] = []
-            kept: list[LCCandidate] = []
-            for c in cands:
-                d = fetch_leetcode_desc(c.slug)
-                if d:
-                    kept.append(c)
-                    descs.append(d)
-            if not kept:
-                stats["rejected_no_desc"] += 1
-                print("  no LC candidate descriptions")
-                continue
-
-            cache_key = _verdict_cache_key(p.get("id"), kept, model)
-            from_cache = cache_key in verdict_cache
-            verdict = _judge_pair_set(
-                striver_title=title,
-                striver_diff=p.get("difficulty"),
-                striver_desc=striver_desc,
-                candidates=kept,
-                candidate_descs=descs,
-                model=model,
-                verdict_cache=verdict_cache,
-                problem_id=p.get("id"),
-            )
-            if from_cache:
-                stats["verdict_cache_hits"] += 1
-            if not verdict:
+            try:
+                _process_one_problem(
+                    p=p,
+                    title=title,
+                    fetcher_factory=_ensure_fetcher,
+                    catalogue=catalogue,
+                    top_k=top_k,
+                    model=model,
+                    threshold=threshold,
+                    verdict_cache=verdict_cache,
+                    stats=stats,
+                    samples=samples,
+                )
+            except Exception as e:
+                # Per-problem error (most likely a Playwright crash). Drop the
+                # browser so the next iteration rebuilds it; do NOT kill the run.
                 stats["errors"] += 1
-                print("  judge call failed")
-                if not from_cache:
-                    time.sleep(_rate_limit_sleep_for(model))
-                continue
-
-            picked_slug = verdict.get("slug")
-            conf = float(verdict.get("confidence") or 0.0)
-            picked_obj = next((c for c in kept if c.slug == picked_slug), None)
-
-            if not picked_slug or picked_slug == "null":
-                stats["rejected_below_threshold"] += 1
-                print(f"  no match (judge said none)")
-                if not from_cache:
-                    time.sleep(_rate_limit_sleep_for(model))
-                continue
-
-            if picked_obj is None:
-                # LLM named a slug not in the candidate set — hallucination
-                stats["rejected_bad_slug"] += 1
-                print(f"  bad slug {picked_slug!r} (not in candidates)")
-                if not from_cache:
-                    time.sleep(_rate_limit_sleep_for(model))
-                continue
-
-            if conf < threshold:
-                stats["rejected_below_threshold"] += 1
-                print(f"  conf {conf:.3f} < {threshold:.3f}")
-                if not from_cache:
-                    time.sleep(_rate_limit_sleep_for(model))
-                continue
-
-            if not _difficulty_compatible(p.get("difficulty"), picked_obj.difficulty_level):
-                stats["rejected_difficulty"] += 1
-                print(
-                    f"  difficulty mismatch (striver={p.get('difficulty')} "
-                    f"lc={picked_obj.difficulty_level})"
-                )
-                if not from_cache:
-                    time.sleep(_rate_limit_sleep_for(model))
-                continue
-
-            p["practice_url"] = f"https://leetcode.com/problems/{picked_slug}/"
-            p["practice_url_source"] = "leetcode-semantic"
-            p["practice_url_confidence"] = round(conf, 3)
-            p["practice_url_reason"] = (verdict.get("reason") or "")[:160]
-            stats["matched"] += 1
-            print(f"  matched LC {picked_obj.title!r} conf={conf:.3f}")
-            if len(samples) < 12:
-                samples.append(
-                    f"[{conf:.3f}] {title!r} -> {picked_obj.title!r}"
-                )
-            if not from_cache:
-                time.sleep(_rate_limit_sleep_for(model))
-
-            # Save progress every 10 problems so a crash doesn't lose work
-            if i % 10 == 0:
-                _save_partial()
+                print(f"  ! exception: {type(e).__name__}: {str(e)[:120]}")
+                _drop_fetcher()
+            finally:
+                # Save EVERY 10 problems regardless of branch (matched, skipped,
+                # rejected, errored). This was previously after `continue`s
+                # which silently skipped the save.
+                if i % 10 == 0:
+                    _save_partial()
+    finally:
+        _drop_fetcher()
 
     # Final save of cache (problems.json save happens below)
     if not dry_run:
@@ -1114,10 +1272,10 @@ def run_production(
         print("\n· dry-run: not writing problems.json")
         return
 
-    # Atomic write
+    # Atomic write (with retry for OneDrive locks)
     tmp = PROBLEMS_FILE.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
-    os.replace(tmp, PROBLEMS_FILE)
+    _atomic_replace(tmp, PROBLEMS_FILE)
     print(f"\n· wrote {PROBLEMS_FILE.name}")
 
 
@@ -1177,17 +1335,19 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     # If --model not specified, pick a default based on which key is present.
-    # Gemini's 1500 RPD free tier is far more generous than Groq's 100K TPD,
-    # so prefer it when available.
+    # Preference order: NVIDIA (largest free quota for 70B-class models) →
+    # Groq (fast but tight TPD) → Gemini (very tight free-tier RPD per project).
     if args.model is None:
-        if os.environ.get("GEMINI_API_KEY"):
-            args.model = DEFAULT_GEMINI_MODEL
+        if os.environ.get("NVIDIA_API_KEY"):
+            args.model = DEFAULT_NVIDIA_MODEL
         elif os.environ.get("GROQ_API_KEY"):
             args.model = DEFAULT_GROQ_MODEL
+        elif os.environ.get("GEMINI_API_KEY"):
+            args.model = DEFAULT_GEMINI_MODEL
         else:
             print(
-                "! Neither GEMINI_API_KEY nor GROQ_API_KEY set. "
-                "Put one in .env or environment.",
+                "! No LLM API key set. Put one of NVIDIA_API_KEY, "
+                "GROQ_API_KEY or GEMINI_API_KEY in .env or environment.",
                 file=sys.stderr,
             )
             return 1
