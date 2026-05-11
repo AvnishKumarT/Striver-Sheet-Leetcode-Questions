@@ -28,6 +28,8 @@ striver-a2z-sheet-questions/
 ├── enrich_practice_urls.py      Pass 1: fill missing practice_url via LeetCode fuzzy match
 ├── enrich_from_codolio.py       Pass 2: fill remaining via Codolio community mapping
 ├── enrich_practice_urls_semantic.py  Pass 4 (LLM judge, see §3): semantic problem-statement matching
+├── enrich_from_curated.py       Pass 5: apply hand-curated Striver → LC/GFG mappings
+├── curated_mappings.json        The mappings, hand-verified and URL-validated
 ├── _striver_descriptions/       Cached article texts (gitignored)
 ├── _lc_descriptions/            Cached LC problem statements (gitignored)
 ├── _llm_verdicts.json           Cached LLM judgements per (problem_id, candidate_set, model)
@@ -203,6 +205,30 @@ picks up where the last run was capped, never re-pays for prior verdicts.
 CLI flags: `--calibrate`, `--threshold N`, `--min-threshold N`, `--top-k N`,
 `--model NAME`, `--limit N`, `--dry-run`, `--headed`.
 
+### `enrich_from_curated.py`  (Stage 5 — hand-curated)
+
+After the LLM judge (Stage 4) hit its realistic ceiling — most "near match"
+LC candidates are wrong at confidence 0.8 ("Second Largest Element" → LC
+"Second Largest Digit in a String"), so lowering threshold is unsafe — we
+fall back to a small JSON of hand-verified mappings in
+`curated_mappings.json`.
+
+The applier:
+
+1. Reads each `{problem_id: {url, host, note}}` entry.
+2. **Validates the URL is live and points to a real problem page**:
+   - LC URLs are accepted if they match `^https://leetcode.com/problems/[a-z0-9-]+/?$` (LC's CF rules 403 generic UAs, so HTTP-fetch validation is unreliable; URL pattern is enough since LC slugs are stable).
+   - GFG URLs are fetched and rejected if the body contains "Page Not Found"/"404", and required to contain `problem` + (`difficulty`|`solve`) to count as a real practice page.
+   - Other hosts (SPOJ/HackerRank/InterviewBit) are accepted on HTTP 2xx.
+3. Sets `practice_url_source = "curated"` and `practice_url_host` to the host name.
+4. Idempotent — clears prior `curated` entries before re-deriving; never touches `takeuforward`/`leetcode-*`/`codolio-*`/`leetcode-semantic`.
+
+Coverage delta from this stage: **+58 matches** (49 GFG + 4 LC + 5 others
+that already had something but got promoted to a better URL). Final
+coverage: **347 / 474 (73.2%)**.
+
+CLI flags: `--dry-run`, `--no-validate`, `--problems`, `--mappings`.
+
 ### `generate_html.py`
 
 Renders `problems.json` to a self-contained `problems.html`. **Each title
@@ -213,8 +239,9 @@ Client-side JS adds title search and All/Easy/Medium/Hard difficulty filters.
 
 CLI: `--problems`, `--output`.
 
-Link distribution as of the last scrape + enrichment passes:
-**LeetCode 284, HackerRank 2, InterviewBit 2, SPOJ 1, no link 185**.
+Link distribution as of the last scrape + all 5 enrichment passes:
+**LeetCode 293, GFG 49, HackerRank 2, InterviewBit 2, SPOJ 1, no link 127**.
+That's **347 / 474 (73.2%)** linked.
 
 ### `progress.py`
 
@@ -321,8 +348,9 @@ python enrich_practice_urls.py            # 2. LC fuzzy match  (free, fast, dete
 python enrich_from_codolio.py             # 3. Codolio community map  (free, fast, deterministic)
 python enrich_practice_urls_semantic.py --calibrate            # 4a. LLM calibration  (uses API quota)
 python enrich_practice_urls_semantic.py --threshold 0.97       # 4b. LLM semantic match  (uses API quota)
-python generate_html.py                   # 5. → problems.html
-python generate_skeleton.py               # 6. → solutions/ folder tree (C++ stubs)
+python enrich_from_curated.py             # 5. apply hand-curated mappings (free, fast)
+python generate_html.py                   # 6. → problems.html
+python generate_skeleton.py               # 7. → solutions/ folder tree (C++ stubs)
 
 # Track progress
 python progress.py stats

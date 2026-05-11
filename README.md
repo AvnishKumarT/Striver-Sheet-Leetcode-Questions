@@ -36,10 +36,10 @@ in C++.
 - `progress.py` — tiny CLI to track which problems you've solved, with notes
   and a per-problem timestamp, persisted to `progress.json`.
 
-Final coverage: **289 / 474** problems have an external practice URL
-(LeetCode 284, HackerRank 2, InterviewBit 2, SPOJ 1). The remaining 185 are
-theory rows / step-1 fundamentals / GFG-only problems for which no public
-mapping data exists.
+Final coverage: **347 / 474 (73.2%)** problems have an external practice URL.
+Breakdown: LeetCode 293, GFG 49, HackerRank 2, InterviewBit 2, SPOJ 1. The
+remaining 127 are theory rows and step-1 / sorting fundamentals that don't
+exist as standalone problems on any major platform.
 
 `solution.cpp` files are **never overwritten** on re-runs (your work is safe).
 Re-running the scraper preserves the previous `scraped_at` when nothing on
