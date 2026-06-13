@@ -468,8 +468,9 @@
               "youtube_url": "https://youtu.be/1xNbjMdbjug",
               "plus_problem_url": "https://takeuforward.org/plus/dsa/problems/count-all-digits-of-a-number?source=strivers-a2z-dsa-track",
               "plus_editorial_url": "https://takeuforward.org/plus/dsa/problems/count-all-digits-of-a-number?tab=editorial&source=strivers-a2z-dsa-track",
-              "practice_url": null,
-              "practice_url_source": null
+              "practice_url": "https://www.geeksforgeeks.org/problems/count-digits5716/1",
+              "practice_url_source": "curated",
+              "practice_url_host": "geeksforgeeks"
             },
             {
               "id": 376,
@@ -504,8 +505,9 @@
               "youtube_url": "https://youtu.be/1xNbjMdbjug?t=2684",
               "plus_problem_url": "https://takeuforward.org/plus/dsa/problems/gcd-of-two-numbers?source=strivers-a2z-dsa-track",
               "plus_editorial_url": "https://takeuforward.org/plus/dsa/problems/gcd-of-two-numbers?tab=editorial&source=strivers-a2z-dsa-track",
-              "practice_url": null,
-              "practice_url_source": null
+              "practice_url": "https://www.geeksforgeeks.org/problems/gcd-of-two-numbers3459/1",
+              "practice_url_source": "curated",
+              "practice_url_host": "geeksforgeeks"
             },
             {
               "id": 366,
@@ -528,8 +530,9 @@
               "youtube_url": "https://youtu.be/1xNbjMdbjug?t=1580",
               "plus_problem_url": "https://takeuforward.org/plus/dsa/problems/divisors-of-a-number?source=strivers-a2z-dsa-track",
               "plus_editorial_url": "https://takeuforward.org/plus/dsa/problems/divisors-of-a-number?tab=editorial&source=strivers-a2z-dsa-track",
-              "practice_url": null,
-              "practice_url_source": null
+              "practice_url": "https://www.geeksforgeeks.org/problems/all-divisors-of-a-number/1",
+              "practice_url_source": "curated",
+              "practice_url_host": "geeksforgeeks"
             },
             {
               "id": 365,
@@ -540,7 +543,9 @@
               "youtube_url": "https://youtu.be/1xNbjMdbjug?t=2381",
               "plus_problem_url": "https://takeuforward.org/plus/dsa/problems/check-for-prime-number?source=strivers-a2z-dsa-track",
               "plus_editorial_url": "https://takeuforward.org/plus/dsa/problems/check-for-prime-number?tab=editorial&source=strivers-a2z-dsa-track",
-              "practice_url": null
+              "practice_url": "https://www.geeksforgeeks.org/problems/prime-number2314/1",
+              "practice_url_source": "curated",
+              "practice_url_host": "geeksforgeeks"
             }
           ]
         },
@@ -683,7 +688,9 @@
               "youtube_url": null,
               "plus_problem_url": "https://takeuforward.org/plus/dsa/problems/counting-frequencies-of-array-elements?source=strivers-a2z-dsa-track",
               "plus_editorial_url": "https://takeuforward.org/plus/dsa/problems/counting-frequencies-of-array-elements?tab=editorial&source=strivers-a2z-dsa-track",
-              "practice_url": null
+              "practice_url": "https://www.geeksforgeeks.org/problems/frequency-of-array-elements-1587115620/1",
+              "practice_url_source": "curated",
+              "practice_url_host": "geeksforgeeks"
             },
             {
               "id": 344,
@@ -840,7 +847,9 @@
               "youtube_url": "https://youtu.be/37E9ckMDdTk?t=810",
               "plus_problem_url": "https://takeuforward.org/plus/dsa/problems/second-largest-element?source=strivers-a2z-dsa-track",
               "plus_editorial_url": "https://takeuforward.org/plus/dsa/problems/second-largest-element?tab=editorial&source=strivers-a2z-dsa-track",
-              "practice_url": null
+              "practice_url": "https://www.geeksforgeeks.org/problems/second-largest3735/1",
+              "practice_url_source": "curated",
+              "practice_url_host": "geeksforgeeks"
             },
             {
               "id": 379,
@@ -974,7 +983,9 @@
               "youtube_url": "https://www.youtube.com/watch?v=frf7qxiN2qU&feature=youtu.be",
               "plus_problem_url": "https://takeuforward.org/plus/dsa/problems/longest-subarray-with-sum-k?source=strivers-a2z-dsa-track",
               "plus_editorial_url": "https://takeuforward.org/plus/dsa/problems/longest-subarray-with-sum-k?tab=editorial&source=strivers-a2z-dsa-track",
-              "practice_url": null
+              "practice_url": "https://www.geeksforgeeks.org/problems/longest-sub-array-with-sum-k0809/1",
+              "practice_url_source": "curated",
+              "practice_url_host": "geeksforgeeks"
             },
             {
               "id": 564,
@@ -1389,7 +1400,9 @@
               "youtube_url": "https://www.youtube.com/watch?v=6zhGS79oQ4k&list=PLgUwDviBIf0pMFMWuuvDNMAkoQFi-h0ZF&index=3",
               "plus_problem_url": "https://takeuforward.org/plus/dsa/problems/floor-and-ceil-in-sorted-array?source=strivers-a2z-dsa-track",
               "plus_editorial_url": "https://takeuforward.org/plus/dsa/problems/floor-and-ceil-in-sorted-array?tab=editorial&source=strivers-a2z-dsa-track",
-              "practice_url": null
+              "practice_url": "https://www.geeksforgeeks.org/problems/ceil-the-floor2802/1",
+              "practice_url_source": "curated",
+              "practice_url_host": "geeksforgeeks"
             },
             {
               "id": 85,
