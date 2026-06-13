@@ -78,6 +78,15 @@
     "327": {"url": "https://www.geeksforgeeks.org/problems/matrix-chain-multiplication0303/1", "host": "geeksforgeeks"},
 
     "1023": {"url": "https://www.geeksforgeeks.org/problems/longest-valid-word-with-all-prefixes/1", "host": "geeksforgeeks"},
-    "1026": {"url": "https://www.geeksforgeeks.org/problems/count-of-distinct-substrings/1", "host": "geeksforgeeks"}
+    "1026": {"url": "https://www.geeksforgeeks.org/problems/count-of-distinct-substrings/1", "host": "geeksforgeeks"},
+
+    "43":  {"url": "https://www.geeksforgeeks.org/problems/second-largest3735/1", "host": "geeksforgeeks", "note": "Second largest element in array"},
+    "372": {"url": "https://www.geeksforgeeks.org/problems/gcd-of-two-numbers3459/1", "host": "geeksforgeeks", "note": "GCD / HCF of two numbers"},
+    "86":  {"url": "https://www.geeksforgeeks.org/problems/ceil-the-floor2802/1", "host": "geeksforgeeks", "note": "Floor and Ceil in sorted array"},
+    "2836": {"url": "https://www.geeksforgeeks.org/problems/longest-sub-array-with-sum-k0809/1", "host": "geeksforgeeks", "note": "Longest subarray with sum K (positives)"},
+    "365": {"url": "https://www.geeksforgeeks.org/problems/prime-number2314/1", "host": "geeksforgeeks", "note": "Check if a number is prime"},
+    "2807": {"url": "https://www.geeksforgeeks.org/problems/all-divisors-of-a-number/1", "host": "geeksforgeeks", "note": "Print all divisors of a number"},
+    "367": {"url": "https://www.geeksforgeeks.org/problems/count-digits5716/1", "host": "geeksforgeeks", "note": "Count digits of a number"},
+    "252": {"url": "https://www.geeksforgeeks.org/problems/frequency-of-array-elements-1587115620/1", "host": "geeksforgeeks", "note": "Count frequencies of array elements"}
   }
 }
