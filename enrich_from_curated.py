@@ -78,6 +78,9 @@ def _fetch_text(url: str, timeout: float = 20.0) -> tuple[int, str]:
 
 
 _LC_SLUG_RE = re.compile(r"^https://leetcode\.com/problems/[a-z0-9-]+/?$")
+_CN_SLUG_RE = re.compile(
+    r"^https://(www\.)?naukri\.com/code360/problems/[a-z0-9-]+/?(\?.*)?$"
+)
 
 
 def _validate(url: str, host: str) -> tuple[bool, str]:
@@ -109,6 +112,13 @@ def _validate(url: str, host: str) -> tuple[bool, str]:
         if "problem" in lower and ("difficulty" in lower or "solve" in lower):
             return True, "ok"
         return False, "no positive problem markers"
+
+    # Coding Ninjas / Naukri Code360: CF-protected like LC; trust canonical
+    # /problems/<slug> URL pattern instead of fetching (generic UAs get 403).
+    if host in ("codingninjas", "naukri", "code360"):
+        if _CN_SLUG_RE.match(url):
+            return True, "ok (Code360 URL pattern)"
+        return False, "Code360 URL does not match canonical /problems/<slug> pattern"
 
     # Other hosts (spoj, hackerrank, interviewbit) — just trust HTTP 2xx
     return True, "ok (non-validated host)"
