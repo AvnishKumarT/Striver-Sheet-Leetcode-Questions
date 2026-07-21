@@ -188,9 +188,167 @@ PAGE_TEMPLATE = """<!doctype html>
     padding: 0 0.4rem;
     border-radius: 4px;
   }}
+  /* ── link button ── */
+  .btn-link {{
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 0.15rem 0.4rem;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }}
+  .btn-link:hover {{ color: var(--link); border-color: var(--link); }}
+  .btn-link.linked {{ color: #3fb950; border-color: #3fb950; }}
+  /* ── modal ── */
+  #link-overlay {{
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }}
+  #link-overlay.open {{ display: flex; }}
+  #link-modal {{
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    width: min(480px, 94vw);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }}
+  #link-modal h2 {{ margin: 0; font-size: 1rem; }}
+  #link-modal .problem-name {{ color: var(--muted); font-size: 0.85rem; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+  #link-url {{
+    padding: 0.5rem 0.75rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font: inherit;
+    width: 100%;
+  }}
+  #link-url:focus {{ outline: none; border-color: var(--link); }}
+  .modal-actions {{ display: flex; gap: 0.5rem; justify-content: flex-end; }}
+  .btn-save {{
+    padding: 0.45rem 1rem;
+    background: var(--link);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+  }}
+  .btn-save:hover {{ opacity: 0.85; }}
+  .btn-save:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+  .btn-cancel {{
+    padding: 0.45rem 1rem;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+  }}
+  .btn-cancel:hover {{ border-color: var(--muted); }}
+  /* ── floating push panel ── */
+  #push-panel {{
+    position: fixed;
+    bottom: 1.25rem;
+    right: 1.25rem;
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.4rem;
+  }}
+  #push-status {{
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-align: right;
+    max-width: 240px;
+  }}
+  #btn-push {{
+    padding: 0.55rem 1.1rem;
+    background: #238636;
+    color: #fff;
+    border: 1px solid #2ea043;
+    border-radius: 8px;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    box-shadow: 0 4px 14px rgba(35,134,54,0.35);
+    transition: opacity 0.15s;
+  }}
+  #btn-push:hover {{ opacity: 0.88; }}
+  #btn-push:disabled {{ opacity: 0.45; cursor: not-allowed; }}
+  /* ── offline banner ── */
+  #offline-banner {{
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: #6e4b08;
+    color: #f0c070;
+    text-align: center;
+    padding: 0.45rem;
+    font-size: 0.82rem;
+    z-index: 2000;
+  }}
+  /* ── status toast ── */
+  #toast {{
+    position: fixed;
+    bottom: 5rem;
+    right: 1.25rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+    max-width: 300px;
+    z-index: 950;
+  }}
+  #toast.show {{ opacity: 1; }}
+  #toast.success {{ border-color: #2ea043; color: #3fb950; }}
+  #toast.error {{ border-color: #f85149; color: #f85149; }}
 </style>
 </head>
 <body>
+<div id="offline-banner">⚠ API server offline — run <code>python api_server.py</code> to enable manual linking and GitHub push.</div>
+<div id="toast"></div>
+<!-- ── link modal ── -->
+<div id="link-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div id="link-modal">
+    <h2 id="modal-title">Link Practice URL</h2>
+    <p class="problem-name" id="modal-problem-name"></p>
+    <input id="link-url" type="url" placeholder="https://leetcode.com/problems/…" autocomplete="off">
+    <div class="modal-actions">
+      <button class="btn-cancel" id="modal-cancel">Cancel</button>
+      <button class="btn-save" id="modal-save">Save</button>
+    </div>
+  </div>
+</div>
+<!-- ── floating push panel ── -->
+<div id="push-panel">
+  <div id="push-status"></div>
+  <button id="btn-push" title="Commit problems.json + problems.html and push to origin/main">
+    🚀 Push to GitHub
+  </button>
+</div>
 <header>
   <h1>Striver A2Z DSA Sheet</h1>
   <span class="meta">{total_problems} problems · {with_link} linked ({pct_link}%) · {total_lectures} lectures · 18 steps · scraped {scraped_at}</span>
@@ -207,6 +365,7 @@ PAGE_TEMPLATE = """<!doctype html>
 </main>
 <script>
 (() => {{
+  /* ── filter ── */
   const q = document.getElementById('q');
   const chips = document.querySelectorAll('.chip');
   let activeDiff = 'all';
@@ -220,7 +379,6 @@ PAGE_TEMPLATE = """<!doctype html>
       const diffOk = activeDiff === 'all' || diff === activeDiff;
       tr.classList.toggle('hidden', !(titleOk && diffOk));
     }});
-    // Hide lectures with zero visible rows; hide steps with zero visible lectures
     document.querySelectorAll('.lecture').forEach(lec => {{
       const any = lec.querySelectorAll('tr.problem:not(.hidden)').length > 0;
       lec.classList.toggle('hidden', !any);
@@ -239,6 +397,148 @@ PAGE_TEMPLATE = """<!doctype html>
     activeDiff = c.dataset.diff;
     applyFilter();
   }}));
+
+  /* ── API helpers ── */
+  const API = 'http://127.0.0.1:5050';
+  let apiOnline = false;
+
+  async function checkApi() {{
+    try {{
+      const r = await fetch(API + '/api/health', {{signal: AbortSignal.timeout(1500)}});
+      apiOnline = r.ok;
+    }} catch {{
+      apiOnline = false;
+    }}
+    document.getElementById('offline-banner').style.display = apiOnline ? 'none' : 'block';
+  }}
+  checkApi();
+  setInterval(checkApi, 10000);
+
+  /* ── toast ── */
+  let toastTimer;
+  function showToast(msg, type='success') {{
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show ' + type;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.className = '', 3500);
+  }}
+
+  /* ── modal ── */
+  const overlay  = document.getElementById('link-overlay');
+  const modalName= document.getElementById('modal-problem-name');
+  const urlInput = document.getElementById('link-url');
+  const saveBtn  = document.getElementById('modal-save');
+  const cancelBtn= document.getElementById('modal-cancel');
+  let currentPid = null;
+  let currentBtn = null;
+
+  function openModal(btn) {{
+    if (!apiOnline) {{ showToast('API server offline — run python api_server.py', 'error'); return; }}
+    currentPid = parseInt(btn.dataset.pid, 10);
+    currentBtn = btn;
+    const tr = btn.closest('tr');
+    modalName.textContent = tr ? tr.dataset.fullTitle : '';
+    urlInput.value = btn.dataset.url || '';
+    overlay.classList.add('open');
+    urlInput.focus();
+    urlInput.select();
+  }}
+
+  function closeModal() {{
+    overlay.classList.remove('open');
+    currentPid = null;
+    currentBtn = null;
+  }}
+
+  overlay.addEventListener('click', e => {{ if (e.target === overlay) closeModal(); }});
+  cancelBtn.addEventListener('click', closeModal);
+  document.addEventListener('keydown', e => {{ if (e.key === 'Escape') closeModal(); }});
+
+  saveBtn.addEventListener('click', async () => {{
+    const url = urlInput.value.trim();
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+    try {{
+      const r = await fetch(API + '/api/link', {{
+        method: 'PATCH',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{problem_id: currentPid, url}})
+      }});
+      const data = await r.json();
+      if (r.ok) {{
+        // update button appearance inline
+        currentBtn.dataset.url = url;
+        currentBtn.textContent = url ? '✏ linked' : '🔗';
+        currentBtn.classList.toggle('linked', !!url);
+        // update title cell link inline without full reload
+        const td = currentBtn.closest('tr').querySelector('td:nth-child(2)');
+        if (td) {{
+          const nameEl = td.querySelector('a, span.no-link');
+          const name = nameEl ? nameEl.textContent : '';
+          if (url) {{
+            td.innerHTML = `<a href="${{url}}" target="_blank" rel="noopener">${{name}}</a>`;
+          }} else {{
+            td.innerHTML = `<span class="no-link">${{name}}</span><span class="no-link-tag">no external link</span>`;
+          }}
+          // re-append the link button
+          const newBtn = document.createElement('button');
+          newBtn.className = 'btn-link' + (url ? ' linked' : '');
+          newBtn.dataset.pid = currentPid;
+          newBtn.dataset.url = url;
+          newBtn.title = 'Set / change practice URL';
+          newBtn.textContent = url ? '✏ linked' : '🔗';
+          newBtn.addEventListener('click', () => openModal(newBtn));
+          td.appendChild(newBtn);
+        }}
+        showToast(url ? '✓ URL saved — regenerated HTML' : '✓ URL cleared');
+        closeModal();
+        document.getElementById('push-status').textContent = 'Unsaved changes — push to deploy.';
+      }} else {{
+        showToast(data.error || 'Error saving', 'error');
+      }}
+    }} catch(e) {{
+      showToast('Could not reach API server', 'error');
+    }} finally {{
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }}
+  }});
+
+  urlInput.addEventListener('keydown', e => {{ if (e.key === 'Enter') saveBtn.click(); }});
+
+  // wire up all link buttons
+  document.querySelectorAll('.btn-link').forEach(btn => {{
+    btn.addEventListener('click', () => openModal(btn));
+  }});
+
+  /* ── push to GitHub ── */
+  const pushBtn    = document.getElementById('btn-push');
+  const pushStatus = document.getElementById('push-status');
+
+  pushBtn.addEventListener('click', async () => {{
+    if (!apiOnline) {{ showToast('API server offline', 'error'); return; }}
+    pushBtn.disabled = true;
+    pushBtn.textContent = '⏳ Pushing…';
+    pushStatus.textContent = '';
+    try {{
+      const r = await fetch(API + '/api/push', {{method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: '{{}}'}} );
+      const data = await r.json();
+      if (r.ok) {{
+        showToast('✓ Pushed to origin/main — Vercel deploying…');
+        pushStatus.textContent = 'Last push: ' + new Date().toLocaleTimeString();
+      }} else {{
+        showToast(data.error || 'Push failed', 'error');
+        pushStatus.textContent = 'Push failed — check console';
+        console.error(data.error);
+      }}
+    }} catch(e) {{
+      showToast('Could not reach API server', 'error');
+    }} finally {{
+      pushBtn.disabled = false;
+      pushBtn.textContent = '🚀 Push to GitHub';
+    }}
+  }});
 }})();
 </script>
 </body>
@@ -304,10 +604,21 @@ def _row_html(idx: int, p: dict[str, Any]) -> str:
     )
     host_html = f'<span class="host">{host}</span>' if host else ""
 
+    pid = p.get("id") or 0
+    link_btn_class = "btn-link linked" if primary else "btn-link"
+    link_btn_label = "\u270f linked" if primary else "\U0001f517"
+    link_btn = (
+        f'<button class="{link_btn_class}" data-pid="{pid}"'
+        f' data-url="{_h(primary or "")}"'
+        f' title="Set / change practice URL">'
+        f'{link_btn_label}</button>'
+    )
+
     return (
-        f'<tr class="problem" data-title="{_h(title.lower())}" data-diff="{_h(diff)}">'
+        f'<tr class="problem" data-title="{_h(title.lower())}"'
+        f' data-diff="{_h(diff)}" data-full-title="{_h(title)}">'
         f"<td>{idx}</td>"
-        f"<td>{title_link}{host_html}</td>"
+        f"<td>{title_link}{host_html} {link_btn}</td>"
         f'<td class="extras">{" ".join(extras)}</td>'
         f'<td class="diff">{diff_html}</td>'
         f"</tr>"
